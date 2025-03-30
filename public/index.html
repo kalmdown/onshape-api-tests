@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Onshape API Express</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      padding-top: 2rem;
+      padding-bottom: 2rem;
+    }
+    .example-container {
+      margin-bottom: 1.5rem;
+      border: 1px solid #dee2e6;
+      border-radius: 0.25rem;
+      padding: 1rem;
+    }
+    .log-area {
+      height: 300px;
+      overflow-y: auto;
+      background-color: #f8f9fa;
+      padding: 1rem;
+      border: 1px solid #dee2e6;
+      border-radius: 0.25rem;
+      font-family: monospace;
+      margin-top: 1rem;
+    }
+    .log-entry {
+      margin-bottom: 0.5rem;
+    }
+    .log-entry-time {
+      color: #6c757d;
+      margin-right: 0.5rem;
+    }
+    .log-entry-method {
+      font-weight: bold;
+      margin-right: 0.5rem;
+    }
+    .log-entry-url {
+      color: #007bff;
+      margin-right: 0.5rem;
+    }
+    .log-entry-status {
+      font-weight: bold;
+    }
+    .log-entry-status-success {
+      color: #28a745;
+    }
+    .log-entry-status-error {
+      color: #dc3545;
+    }
+    .log-entry-message {
+      margin-left: 1rem;
+      white-space: pre-wrap;
+    }
+    .input-group {
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="mb-4">Onshape API Express</h1>
+    
+    <div class="row mb-4">
+      <div class="col-md-12">
+        <div class="card">
+          <div class="card-header">
+            Configuration
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-4">
+                <div class="input-group">
+                  <span class="input-group-text">Document ID</span>
+                  <input type="text" id="documentId" class="form-control" placeholder="did">
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="input-group">
+                  <span class="input-group-text">Workspace ID</span>
+                  <input type="text" id="workspaceId" class="form-control" placeholder="wid">
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="input-group">
+                  <span class="input-group-text">Element ID</span>
+                  <input type="text" id="elementId" class="form-control" placeholder="eid">
+                </div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-12">
+                <div class="input-group">
+                  <span class="input-group-text">Server URL</span>
+                  <input type="text" id="serverUrl" class="form-control" value="http://localhost:3000" placeholder="http://localhost:3000">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-6">
+        <!-- Example Containers -->
+        <div class="example-container">
+          <h3>Health Check</h3>
+          <p>Check if the API is running properly</p>
+          <button class="btn btn-primary" id="healthCheck">Run Health Check</button>
+        </div>
+
+        <div class="example-container">
+          <h3>Get Default Planes</h3>
+          <p>Retrieve IDs for the default planes (Top, Front, Right)</p>
+          <button class="btn btn-primary" id="getDefaultPlanes">Get Default Planes</button>
+        </div>
+
+        <div class="example-container">
+          <h3>Create Sketch on Default Plane</h3>
+          <p>Create a circular sketch on a default plane</p>
+          <div class="mb-3">
+            <label class="form-label">Plane</label>
+            <select class="form-select" id="sketchPlane">
+              <option value="top">Top</option>
+              <option value="front">Front</option>
+              <option value="right">Right</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" id="createSketch">Create Sketch</button>
+        </div>
+
+        <div class="example-container">
+          <h3>Create Extrude Feature</h3>
+          <p>Create an extrude from an existing sketch</p>
+          <div class="mb-3">
+            <label class="form-label">Sketch ID</label>
+            <input type="text" class="form-control" id="extrudeSketchId" placeholder="Enter Sketch ID">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Depth (inches)</label>
+            <input type="number" class="form-control" id="extrudeDepth" value="2.0">
+          </div>
+          <button class="btn btn-primary" id="createExtrude">Create Extrude</button>
+        </div>
+
+        <div class="example-container">
+          <h3>Create Complete Feature</h3>
+          <p>Create a sketch and extrude in one step</p>
+          <div class="mb-3">
+            <label class="form-label">Plane</label>
+            <select class="form-select" id="completePlane">
+              <option value="top">Top</option>
+              <option value="front">Front</option>
+              <option value="right">Right</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Depth (inches)</label>
+            <input type="number" class="form-control" id="completeDepth" value="1.5">
+          </div>
+          <button class="btn btn-primary" id="createComplete">Create Complete Feature</button>
+        </div>
+      </div>
+
+      <div class="col-md-6">
+        <h3>Log</h3>
+        <div class="log-area" id="logArea"></div>
+        <div class="mt-2">
+          <button class="btn btn-secondary" id="clearLog">Clear Log</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
