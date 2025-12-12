@@ -17,6 +17,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const createExtrudeBtn = document.getElementById('createExtrude');
     const createCompleteBtn = document.getElementById('createComplete');
     
+    // Add circle to sketch button
+    const addCircleBtn = document.getElementById('addCircleBtn');
+    
     // Logging functions
     function logToConsole(method, url, status, message = '') {
       const logEntry = document.createElement('div');
@@ -107,23 +110,50 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
     
+    // Health check function
+    async function checkHealth() {
+      try {
+        const config = getConfig();
+        const response = await fetch(`${config.serverUrl}/auth/health`);
+        const data = await response.json();
+        
+        logToConsole('GET', '/auth/health', response.status, data);
+        
+        if (!data.authenticated) {
+          alert('Warning: Onshape API authentication failed. Please check your API credentials.');
+        } else if (!data.permissions.hasSufficientPermissions) {
+          alert(`Warning: Missing required OAuth scopes: ${data.permissions.requiredScopes.join(', ')}\n\nPlease update your API key permissions in the Onshape portal.`);
+        } else {
+          // Log successful authentication with user info
+          logToConsole('INFO', 'Authentication', 200, {
+            message: 'Successfully authenticated with Onshape API',
+            user: data.user.name,
+            email: data.user.email,
+            roles: data.user.roles,
+            permissions: data.permissions
+          });
+        }
+      } catch (error) {
+        logToConsole('GET', '/auth/health', 500, { error: error.message });
+        alert('Health check failed. Please check the console for details.');
+      }
+    }
+    
+    // Run health check on page load
+    checkHealth();
+    
     // Event listeners for buttons
     clearLogBtn.addEventListener('click', function() {
       logArea.innerHTML = '';
     });
     
-    healthCheckBtn.addEventListener('click', async function() {
-      const config = getConfig();
-      if (!config) return;
-      
-      await makeApiCall('GET', '/kd_health');
-    });
+    healthCheckBtn.addEventListener('click', checkHealth);
     
     getDefaultPlanesBtn.addEventListener('click', async function() {
       const config = getConfig();
       if (!config) return;
       
-      await makeApiCall('GET', `/kd_default_planes/${config.documentId}/${config.workspaceId}/${config.elementId}`);
+      await makeApiCall('GET', `/planes/kd_default_planes/${config.documentId}/${config.workspaceId}/${config.elementId}`);
     });
     
     createSketchBtn.addEventListener('click', async function() {
@@ -131,6 +161,58 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!config) return;
       
       const plane = document.getElementById('sketchPlane').value;
+      
+      // Create an empty sketch
+      const sketchData = {
+        entities: [],
+        constraints: []
+      };
+      
+      const response = await makeApiCall(
+        'POST',
+        `/planes/kd_create_sketch/${config.documentId}/${config.workspaceId}/${config.elementId}`,
+        {
+          planeName: plane,
+          sketchData
+        }
+      );
+
+      if (response.status === 200 && response.data.featureId) {
+        // Update the add circle form with the new sketch ID
+        document.getElementById('addCircleSketchId').value = response.data.featureId;
+      }
+    });
+    
+    createExtrudeBtn.addEventListener('click', async function() {
+      const config = getConfig();
+      if (!config) return;
+      
+      const sketchId = document.getElementById('extrudeSketchId').value.trim();
+      const circleId = document.getElementById('extrudeCircleId').value.trim();
+      const depth = document.getElementById('extrudeDepth').value.trim();
+      
+      if (!sketchId || !circleId) {
+        alert('Please enter both Sketch ID and Circle Entity ID');
+        return;
+      }
+      
+      await makeApiCall(
+        'POST',
+        `/planes/kd_extrude_sketch/${config.documentId}/${config.workspaceId}/${config.elementId}`,
+        {
+          sketchId,
+          circleId,
+          height: parseFloat(depth) || 1.0
+        }
+      );
+    });
+    
+    createCompleteBtn.addEventListener('click', async function() {
+      const config = getConfig();
+      if (!config) return;
+      
+      const plane = document.getElementById('completePlane').value;
+      const depth = document.getElementById('completeDepth').value.trim();
       
       // Circle sketch data
       const sketchData = {
@@ -151,130 +233,58 @@ document.addEventListener('DOMContentLoaded', function() {
       
       await makeApiCall(
         'POST',
-        `/kd_create_sketch/${config.documentId}/${config.workspaceId}/${config.elementId}`,
+        `/planes/kd_create_complete_feature/${config.documentId}/${config.workspaceId}/${config.elementId}`,
         {
           planeName: plane,
-          sketchData
+          sketchData,
+          featureParams: {
+            type: 'extrude',
+            depth: parseFloat(depth) || 1.0,
+            direction: 'OneDirection',
+            endType: 'Blind',
+            solid: true
+          }
         }
       );
     });
     
-    createExtrudeBtn.addEventListener('click', async function() {
+    // Add circle to sketch button
+    addCircleBtn.addEventListener('click', async function() {
       const config = getConfig();
       if (!config) return;
       
-      const sketchId = document.getElementById('extrudeSketchId').value.trim();
-      const depth = document.getElementById('extrudeDepth').value.trim();
+      const sketchId = document.getElementById('addCircleSketchId').value.trim();
+      const radius = parseFloat(document.getElementById('addCircleRadius').value.trim()) || 1.0;
+      const centerX = parseFloat(document.getElementById('addCircleCenterX').value.trim()) || 0;
+      const centerY = parseFloat(document.getElementById('addCircleCenterY').value.trim()) || 0;
       
       if (!sketchId) {
         alert('Please enter a Sketch ID');
         return;
       }
       
-      const featureParams = {
-        type: 'extrude',
-        depth: parseFloat(depth) || 2.0,
-        direction: 'OneDirection',
-        endType: 'Blind',
-        solid: true
-      };
-      
-      await makeApiCall(
+      const response = await makeApiCall(
         'POST',
-        `/kd_create_feature/${config.documentId}/${config.workspaceId}/${config.elementId}`,
+        `/planes/kd_add_circle/${config.documentId}/${config.workspaceId}/${config.elementId}`,
         {
           sketchId,
-          featureParams
+          circleData: {
+            radius,
+            centerX,
+            centerY
+          }
         }
       );
+
+      if (response.status === 200 && response.data.entities) {
+        // Get the circle entity ID from the response
+        const circleId = response.data.entities[0].entityId;
+        // Update the extrude form with both IDs
+        document.getElementById('extrudeSketchId').value = sketchId;
+        document.getElementById('extrudeCircleId').value = circleId;
+      }
     });
     
-    createCompleteBtn.addEventListener('click', async function() {
-      const config = getConfig();
-      if (!config) return;
-      
-      const plane = document.getElementById('completePlane').value;
-      const depth = document.getElementById('completeDepth').value.trim();
-      
-      // Rectangle sketch data
-      const sketchData = {
-        entities: [
-          // Rectangle centered at origin
-          {
-            type: 2,
-            typeName: 'BTMSketchCurveSegment',
-            message: {
-              startPointX: -1.0,
-              startPointY: -1.0,
-              endPointX: 1.0,
-              endPointY: -1.0,
-              startParam: 0,
-              endParam: 1,
-              parameter: 'line1'
-            }
-          },
-          {
-            type: 2,
-            typeName: 'BTMSketchCurveSegment',
-            message: {
-              startPointX: 1.0,
-              startPointY: -1.0,
-              endPointX: 1.0,
-              endPointY: 1.0,
-              startParam: 0,
-              endParam: 1,
-              parameter: 'line2'
-            }
-          },
-          {
-            type: 2,
-            typeName: 'BTMSketchCurveSegment',
-            message: {
-              startPointX: 1.0,
-              startPointY: 1.0,
-              endPointX: -1.0,
-              endPointY: 1.0,
-              startParam: 0,
-              endParam: 1,
-              parameter: 'line3'
-            }
-          },
-          {
-            type: 2,
-            typeName: 'BTMSketchCurveSegment',
-            message: {
-              startPointX: -1.0,
-              startPointY: 1.0,
-              endPointX: -1.0,
-              endPointY: -1.0,
-              startParam: 0,
-              endParam: 1,
-              parameter: 'line4'
-            }
-          }
-        ],
-        constraints: []
-      };
-      
-      const featureParams = {
-        type: 'extrude',
-        depth: parseFloat(depth) || 1.5,
-        direction: 'OneDirection',
-        endType: 'Blind',
-        solid: true
-      };
-      
-      await makeApiCall(
-        'POST',
-        `/kd_create_complete_feature/${config.documentId}/${config.workspaceId}/${config.elementId}`,
-        {
-          planeName: plane,
-          sketchData,
-          featureParams
-        }
-      );
-    });
-  
     // Initialize with a welcome message
     logArea.innerHTML = '<div class="log-entry"><span class="log-entry-time">[' + 
       new Date().toLocaleTimeString() + 

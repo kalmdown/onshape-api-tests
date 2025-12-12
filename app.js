@@ -1,18 +1,21 @@
+// Load environment variables first
+require('dotenv').config();
+
 // app.js
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
 const logger = require('./utils/logger');
 const planesRouter = require('./routes/planesRouter');
 const onshapeProxyRouter = require('./routes/onshapeProxyRouter');
+const authRouter = require('./routes/authRouter');
+const urlParserRouter = require('./routes/urlParserRouter');
 
-// Load environment variables
-dotenv.config();
+// Log environment variables (with sensitive data masked)
 console.log('Environment variables loaded:', {
   ONSHAPE_API_KEY: process.env.ONSHAPE_API_KEY ? '****' : undefined,
   ONSHAPE_SECRET: process.env.ONSHAPE_SECRET ? '****' : undefined,
@@ -63,20 +66,11 @@ if (!fs.existsSync(publicDir)) {
   fs.mkdirSync(publicDir);
 }
 
-// Define routes
-app.use('/', planesRouter);
-
-// Pass-through routes to Onshape API (these follow Onshape API structure)
-app.use('/api', onshapeProxyRouter);
-
-// Internal routes prefix with 'kd_'
-app.get('/kd_health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
-    timestamp: new Date().toISOString(),
-    message: 'Onshape API Express server is running properly'
-  });
-});
+// Routes
+app.use('/auth', authRouter);
+app.use('/planes', planesRouter);
+app.use('/onshape', onshapeProxyRouter);
+app.use('/api/url-parser', urlParserRouter);
 
 // Serve the index.html page at the root
 app.get('/', (req, res) => {

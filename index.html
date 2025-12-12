@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Onshape API Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        .log-section {
+            margin: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f5f5f5;
+        }
+        .log-content {
+            height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .api-detail {
+            margin-left: 20px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .log-entry.error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        .log-entry.info {
+            background-color: #e3f2fd;
+            color: #1565c0;
+        }
+        .api-call {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+        .api-call pre {
+            margin: 5px 0;
+            padding: 5px;
+            background-color: #f8f9fa;
+            border-radius: 3px;
+        }
+        .api-response {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+        .api-response pre {
+            margin: 5px 0;
+            padding: 5px;
+            background-color: #fff;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="log-section">
+        <h3>Log</h3>
+        <div id="log" class="log-content"></div>
+    </div>
+
+    <script>
+        // Connect to WebSocket server
+        const ws = new WebSocket('ws://localhost:3011');
+        
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === 'onshapeApiCall') {
+                const { method, url, payload } = data.data;
+                const timestamp = new Date().toLocaleTimeString();
+                
+                const logElement = document.getElementById('log');
+                const apiCall = document.createElement('div');
+                apiCall.className = 'api-call';
+                
+                if (method === 'GET') {
+                    apiCall.innerHTML = `
+                        <div>[${timestamp}] Retrieving data from Onshape API</div>
+                        <div>GET ${url}</div>
+                    `;
+                } else {
+                    apiCall.innerHTML = `
+                        <div>[${timestamp}] Onshape API Call</div>
+                        <div>${method} ${url}</div>
+                        <pre>${JSON.stringify(payload, null, 2)}</pre>
+                    `;
+                }
+                
+                logElement.appendChild(apiCall);
+                logElement.scrollTop = logElement.scrollHeight;
+            } else if (data.type === 'info' && data.data.message.includes('Response from GET')) {
+                const { message, data: responseData } = data.data;
+                const timestamp = new Date().toLocaleTimeString();
+                
+                const logElement = document.getElementById('log');
+                const response = document.createElement('div');
+                response.className = 'api-response';
+                
+                response.innerHTML = `
+                    <div>[${timestamp}] Response Received</div>
+                    <div>Status: ${responseData.status}</div>
+                    <div>Query Parameters:</div>
+                    <pre>${JSON.stringify(responseData.query, null, 2)}</pre>
+                    <div>Response Data:</div>
+                    <pre>${JSON.stringify(responseData.data, null, 2)}</pre>
+                `;
+                
+                logElement.appendChild(response);
+                logElement.scrollTop = logElement.scrollHeight;
+            }
+        };
+
+        ws.onerror = function(error) {
+            console.error('WebSocket error:', error);
+            log('WebSocket connection error', 'error');
+        };
+
+        ws.onclose = function() {
+            console.log('WebSocket connection closed');
+            log('WebSocket connection closed', 'info');
+        };
+
+        // Update the log function to handle API calls
+        function log(message, type = 'info') {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            let logMessage = `[${timestamp}] ${message}`;
+            
+            // If the message contains API call details, format them nicely
+            if (message.includes('PAYLOAD:')) {
+                const lines = message.split('\n');
+                logMessage = lines.map(line => {
+                    if (line.startsWith('  ')) {
+                        return `<div class="api-detail">${line}</div>`;
+                    }
+                    return line;
+                }).join('<br>');
+            }
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            logEntry.innerHTML = logMessage;
+            logElement.appendChild(logEntry);
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+    </script>
+</body>
+</html> 

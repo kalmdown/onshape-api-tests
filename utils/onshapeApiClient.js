@@ -1,6 +1,5 @@
 // utils/onshapeApiClient.js
 const axios = require('axios');
-const { createHmac, randomBytes } = require('crypto');
 const logger = require('./logger');
 
 class OnshapeApiClient {
@@ -13,46 +12,10 @@ class OnshapeApiClient {
       logger.error('Missing Onshape API credentials');
       throw new Error('Missing Onshape API credentials. Please set ONSHAPE_API_KEY and ONSHAPE_SECRET environment variables.');
     }
-  }
 
-  /**
-   * Build the authentication headers for Onshape API requests
-   * @param {string} method - HTTP method
-   * @param {string} path - API endpoint path
-   * @param {Object} query - Query parameters
-   * @param {string} contentType - Content type
-   * @returns {Object} Headers object
-   */
-  buildAuthHeaders(method, path, query = {}, contentType = 'application/json') {
-    const date = new Date().toUTCString();
-    const nonce = randomBytes(16).toString('hex');
-    
-    // Build the normalized query string
-    const queryString = Object.keys(query)
-      .sort()
-      .map(key => `${key}=${encodeURIComponent(query[key])}`)
-      .join('&');
-    
-    const hmacString = [
-      method,
-      nonce,
-      date,
-      contentType,
-      path,
-      queryString
-    ].join('\n').toLowerCase();
-    
-    const signature = createHmac('sha256', this.secretKey)
-      .update(hmacString)
-      .digest('base64');
-    
-    return {
-      'Content-Type': contentType,
-      'Date': date,
-      'On-Nonce': nonce,
-      'Authorization': `On ${this.apiKey}:${signature}`,
-      'Accept': 'application/json'
-    };
+    // Create base64 encoded credentials
+    const credentials = Buffer.from(`${this.apiKey}:${this.secretKey}`).toString('base64');
+    this.basicAuth = `Basic ${credentials}`;
   }
 
   /**
@@ -61,11 +24,16 @@ class OnshapeApiClient {
    * @param {string} path - API endpoint path
    * @param {Object} query - Query parameters
    * @param {Object} body - Request body for POST/PUT requests
+   * @param {Object} additionalHeaders - Additional headers to include in the request
    * @returns {Promise<Object>} API response
    */
-  async callAPI(method, path, query = {}, body = null) {
+  async callAPI(method, path, query = {}, body = null, additionalHeaders = {}) {
     try {
-      const headers = this.buildAuthHeaders(method, path, query);
+      const headers = {
+        'Authorization': this.basicAuth,
+        'Accept': 'application/json;charset=UTF-8; qs=0.09',
+        ...additionalHeaders
+      };
       
       const config = {
         method,
@@ -75,8 +43,32 @@ class OnshapeApiClient {
         data: (method !== 'GET' && body) ? body : undefined
       };
       
-      logger.debug(`Making ${method} request to ${path}`, { query });
+      // Log the API call with more context
+      if (method === 'GET') {
+        const queryString = Object.keys(query).length > 0 
+          ? `?${Object.entries(query).map(([k, v]) => `${k}=${v}`).join('&')}`
+          : '';
+        logger.logApiCall(`Retrieving data from Onshape API`, method, path + queryString);
+      } else {
+        logger.logApiCall(`Making ${method} request to Onshape API`, method, path, body);
+      }
+      
       const response = await axios(config);
+      
+      // Log the response with more context
+      if (method === 'GET') {
+        logger.info(`Response from GET ${path}:`, {
+          status: response.status,
+          data: response.data,
+          query: query
+        });
+      } else {
+        logger.info(`Response from ${method} ${path}:`, {
+          status: response.status,
+          data: response.data
+        });
+      }
+      
       return response.data;
     } catch (error) {
       if (error.response) {

@@ -20,14 +20,44 @@ router.get('/kd_default_planes/:did/:wid/:eid', async (req, res) => {
     
     logger.info(`Request to get default planes for d/${did}/w/${wid}/e/${eid}`);
     
+    // Validate parameters
+    if (!did || !wid || !eid) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameters',
+        required: ['did', 'wid', 'eid']
+      });
+    }
+    
     const defaultPlanes = await planesUtil.getDefaultPlaneIds(did, wid, eid);
     
     res.json({
       success: true,
-      defaultPlanes
+      message: 'Default planes retrieved successfully',
+      data: {
+        documentId: did,
+        workspaceId: wid,
+        elementId: eid,
+        defaultPlanes
+      }
     });
   } catch (error) {
     logger.error(`Error getting default planes: ${error.message}`);
+    
+    // Handle specific error cases
+    if (error.response) {
+      const status = error.response.status;
+      const message = error.response.data?.message || 'API request failed';
+      
+      return res.status(status).json({
+        success: false,
+        message,
+        error: error.message,
+        details: error.response.data
+      });
+    }
+    
+    // Handle other errors
     res.status(500).json({
       success: false,
       message: 'Failed to get default planes',
@@ -45,27 +75,23 @@ router.post('/kd_create_sketch/:did/:wid/:eid', async (req, res) => {
   try {
     const { did, wid, eid } = req.params;
     const { planeName, sketchData } = req.body;
-    
-    if (!planeName) {
+
+    if (!planeName || !sketchData) {
       return res.status(400).json({
         success: false,
-        message: 'Plane name is required'
+        message: 'Missing required parameters: planeName and sketchData'
       });
     }
-    
-    logger.info(`Request to create sketch on ${planeName} plane for d/${did}/w/${wid}/e/${eid}`);
-    
-    const result = await planesUtil.createSketchOnDefaultPlane(
-      did, wid, eid, planeName, sketchData || {}
-    );
+
+    const result = await planesUtil.createSketchOnDefaultPlane(did, wid, eid, planeName, sketchData);
     
     res.json({
       success: true,
       message: `Sketch created on ${planeName} plane`,
-      featureId: result.featureId || result.id
+      featureId: result.featureId
     });
   } catch (error) {
-    logger.error(`Error creating sketch on default plane: ${error.message}`);
+    logger.error('Error in create sketch endpoint:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to create sketch',
@@ -168,6 +194,127 @@ router.post('/kd_create_complete_feature/:did/:wid/:eid', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create complete feature',
+      error: error.message
+    });
+  }
+});
+
+// Extrude a sketch
+router.post('/kd_extrude_sketch/:did/:wid/:eid', async (req, res) => {
+  try {
+    const { did, wid, eid } = req.params;
+    const { sketchId, circleId, height } = req.body;
+
+    if (!sketchId || !circleId || height === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameters: sketchId, circleId, and height'
+      });
+    }
+
+    const result = await planesUtil.extrudeSketch(did, wid, eid, sketchId, circleId, height);
+    
+    res.json({
+      success: true,
+      message: 'Sketch extruded successfully',
+      featureId: result.featureId
+    });
+  } catch (error) {
+    logger.error('Error in extrude sketch endpoint:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to extrude sketch',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @route   POST /kd_add_circle/:did/:wid/:eid
+ * @desc    Add a circle to an existing sketch
+ * @access  Public
+ */
+router.post('/kd_add_circle/:did/:wid/:eid', async (req, res) => {
+  try {
+    const { did, wid, eid } = req.params;
+    const { sketchId, circleData } = req.body;
+
+    if (!sketchId || !circleData) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameters: sketchId and circleData'
+      });
+    }
+
+    const result = await planesUtil.addCircleToSketch(did, wid, eid, sketchId, circleData);
+    
+    res.json({
+      success: true,
+      message: 'Circle added to sketch successfully',
+      entities: result
+    });
+  } catch (error) {
+    logger.error('Error in add circle endpoint:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add circle to sketch',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @route   GET /kd_get_sketches/:did/:wid/:eid
+ * @desc    Get all sketches from a part studio
+ * @access  Public
+ */
+router.get('/kd_get_sketches/:did/:wid/:eid', async (req, res) => {
+  try {
+    const { did, wid, eid } = req.params;
+    
+    logger.info(`Request to get sketches for d/${did}/w/${wid}/e/${eid}`);
+    
+    // Validate parameters
+    if (!did || !wid || !eid) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameters',
+        required: ['did', 'wid', 'eid']
+      });
+    }
+    
+    const sketches = await planesUtil.getSketches(did, wid, eid);
+    
+    res.json({
+      success: true,
+      message: 'Sketches retrieved successfully',
+      data: {
+        documentId: did,
+        workspaceId: wid,
+        elementId: eid,
+        sketches
+      }
+    });
+  } catch (error) {
+    logger.error(`Error getting sketches: ${error.message}`);
+    
+    // Handle specific error cases
+    if (error.response) {
+      const status = error.response.status;
+      const message = error.response.data?.message || 'API request failed';
+      
+      return res.status(status).json({
+        success: false,
+        message,
+        error: error.message,
+        details: error.response.data
+      });
+    }
+    
+    // Handle other errors
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get sketches',
       error: error.message
     });
   }

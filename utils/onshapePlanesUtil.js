@@ -18,44 +18,23 @@ class OnshapePlanesUtil {
     try {
       logger.info(`Getting default plane IDs for document ${did}, workspace ${wid}, element ${eid}`);
       
-      // This script retrieves transient IDs for the default planes
-      const script = `
-        function(context is Context, queries) {
-          const results = {};
-          
-          // Get Top plane ID
-          results.top = transientQueriesToStrings(
-            evaluateQuery(context, qCreatedBy(makeId("Top"), EntityType.FACE))
-          );
-          
-          // Get Front plane ID
-          results.front = transientQueriesToStrings(
-            evaluateQuery(context, qCreatedBy(makeId("Front"), EntityType.FACE))
-          );
-          
-          // Get Right plane ID
-          results.right = transientQueriesToStrings(
-            evaluateQuery(context, qCreatedBy(makeId("Right"), EntityType.FACE))
-          );
-          
-          return results;
-        }
-      `;
-      
-      const response = await this.apiClient.callAPI('POST', 
-        `/api/v6/partstudios/d/${did}/w/${wid}/e/${eid}/featurescript`, 
-        { rollbackBarIndex: -1 }, 
-        { script }
-      );
-      
-      if (!response.result) {
-        throw new Error('Failed to retrieve default plane IDs');
-      }
-      
-      logger.debug('Default plane IDs retrieved successfully', response.result);
-      return response.result;
+      // Return the known deterministic IDs for the default planes
+      const planeIds = {
+        top: ["JDC"],
+        front: ["JCC"],
+        right: ["JEC"]
+      };
+
+      logger.info('Default plane IDs retrieved successfully:', planeIds);
+      return planeIds;
     } catch (error) {
       logger.error(`Error getting default plane IDs: ${error.message}`);
+      if (error.response) {
+        logger.error('API Error details:', {
+          status: error.response.status,
+          data: error.response.data
+        });
+      }
       throw error;
     }
   }
@@ -66,75 +45,74 @@ class OnshapePlanesUtil {
    * @param {string} wid - Workspace ID
    * @param {string} eid - Element ID
    * @param {string} planeName - Plane name ('top', 'front', or 'right')
-   * @param {Object} sketchData - Sketch entities and constraints
    * @returns {Promise<Object>} Created feature information
    */
-  async createSketchOnDefaultPlane(did, wid, eid, planeName, sketchData) {
+  async createSketchOnDefaultPlane(did, wid, eid, planeName) {
     try {
       // Get default plane IDs
       const defaultPlanes = await this.getDefaultPlaneIds(did, wid, eid);
       
       // Select the correct plane ID based on the requested plane name
       let planeId;
-      switch(planeName.toLowerCase()) {
-        case 'top':
+      switch(planeName) {
+        case 'Top':
           planeId = defaultPlanes.top[0]; // Take the first ID from the array
           break;
-        case 'front':
+        case 'Front':
           planeId = defaultPlanes.front[0];
           break;
-        case 'right':
+        case 'Right':
           planeId = defaultPlanes.right[0];
           break;
         default:
-          throw new Error(`Invalid plane name: ${planeName}. Must be one of: top, front, right`);
-      }
-      
-      if (!planeId) {
-        throw new Error(`Could not find ID for plane: ${planeName}`);
+          throw new Error(`Invalid plane name: ${planeName}. Must be one of: Top, Front, Right`);
       }
       
       logger.info(`Creating sketch on ${planeName} plane with ID ${planeId}`);
       
-      // Build the feature creation request body
+      // Build the feature creation request for an empty sketch
       const requestBody = {
         feature: {
-          type: 151, // BTMSketch type
-          typeName: "BTMSketch",
-          message: {
-            entities: sketchData.entities || [],
-            constraints: sketchData.constraints || [],
-            parameters: [
-              {
-                type: 148,
-                typeName: "BTMParameterQueryList",
-                message: {
-                  queries: [
-                    {
-                      type: 138,
-                      typeName: "BTMIndividualQuery",
-                      message: {
-                        geometryIds: [planeId]
-                      }
-                    }
-                  ]
+          btType: "BTMSketch-151",
+          featureType: "newSketch",
+          name: "Sketch 1",
+          parameters: [
+            {
+              btType: "BTMParameterQueryList-148",
+              queries: [
+                {
+                  btType: "BTMIndividualQuery-138",
+                  deterministicIds: [planeId]
                 }
-              }
-            ]
-          }
+              ],
+              parameterId: "sketchPlane"
+            }
+          ],
+          entities: [],
+          constraints: []
         }
       };
       
-      const response = await this.apiClient.callAPI('POST', 
-        `/api/v6/partstudios/d/${did}/w/${wid}/e/${eid}/features`, 
-        {}, 
-        requestBody
-      );
+      const url = `/api/v10/partstudios/d/${did}/w/${wid}/e/${eid}/features`;
+      logger.logApiCall('Creating sketch on default plane', 'POST', url, requestBody);
       
-      logger.info(`Sketch created successfully on ${planeName} plane`);
-      return response;
+      const response = await this.apiClient.callAPI('POST', url, {}, requestBody);
+
+      if (!response || !response.feature) {
+        logger.error('Invalid API response:', response);
+        throw new Error('Invalid response from Onshape API');
+      }
+
+      logger.info('Sketch created successfully:', response.feature);
+      return response.feature;
     } catch (error) {
       logger.error(`Error creating sketch on default plane: ${error.message}`);
+      if (error.response) {
+        logger.error('API Error details:', {
+          status: error.response.status,
+          data: error.response.data
+        });
+      }
       throw error;
     }
   }
@@ -328,6 +306,234 @@ class OnshapePlanesUtil {
         }
       }
     };
+  }
+
+  async extrudeSketch(did, wid, eid, sketchId, circleId, height) {
+    try {
+      logger.info(`Extruding circle ${circleId} from sketch ${sketchId}`);
+      
+      // Create the extrude feature using the circle's region
+      const extrudeBody = {
+        btType: "BTFeatureDefinitionCall-1406",
+        feature: {
+          btType: "BTMFeature-134",
+          featureType: "extrude",
+          name: "Extrude 1",
+          parameters: [
+            {
+              btType: "BTMParameterEnum-145",
+              value: "SOLID",
+              enumName: "ExtendedToolBodyType",
+              parameterId: "bodyType"
+            },
+            {
+              btType: "BTMParameterEnum-145",
+              value: "NEW",
+              enumName: "NewBodyOperationType",
+              parameterId: "operationType"
+            },
+            {
+              btType: "BTMParameterQueryList-148",
+              queries: [
+                {
+                  btType: "BTMIndividualSketchRegionQuery-140",
+                  featureId: sketchId,
+                  entityId: circleId
+                }
+              ],
+              parameterId: "entities"
+            },
+            {
+              btType: "BTMParameterEnum-145",
+              value: "BLIND",
+              enumName: "BoundingType",
+              parameterId: "endBound"
+            },
+            {
+              btType: "BTMParameterQuantity-147",
+              expression: `${height} in`,
+              parameterId: "depth"
+            }
+          ],
+          returnAfterSubfeatures: false,
+          suppressed: false
+        }
+      };
+
+      const url = `/api/v10/partstudios/d/${did}/w/${wid}/e/${eid}/features`;
+      logger.logApiCall('Extruding sketch', 'POST', url, extrudeBody);
+      
+      const response = await this.apiClient.callAPI('POST', url, {}, extrudeBody);
+
+      if (!response || !response.feature) {
+        logger.error('Invalid API response:', response);
+        throw new Error('Invalid response from Onshape API');
+      }
+
+      logger.info('Extrusion created successfully:', response.feature);
+      return response.feature;
+    } catch (error) {
+      logger.error(`Error extruding sketch: ${error.message}`);
+      if (error.response) {
+        logger.error('API Error details:', {
+          status: error.response.status,
+          data: error.response.data
+        });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get details of a specific sketch
+   * @param {string} did - Document ID
+   * @param {string} wid - Workspace ID
+   * @param {string} eid - Element ID
+   * @param {string} sketchId - ID of the sketch to get details for
+   * @returns {Promise<Object>} Sketch details
+   */
+  async getSketchDetails(did, wid, eid, sketchId) {
+    try {
+      logger.info(`Getting details for sketch ${sketchId}`);
+      
+      // Get all features and find the sketch
+      const url = `/api/v10/partstudios/d/${did}/w/${wid}/e/${eid}/features`;
+      logger.logApiCall('Getting features', 'GET', url);
+      
+      const response = await this.apiClient.callAPI('GET', url, {});
+      
+      if (!response || !response.features) {
+        logger.error('Invalid API response:', response);
+        throw new Error('Invalid response from Onshape API');
+      }
+
+      // Find the specific sketch
+      const sketch = response.features.find(feature => feature.featureId === sketchId);
+      if (!sketch) {
+        throw new Error(`Sketch with ID ${sketchId} not found`);
+      }
+
+      logger.info('Sketch details retrieved successfully');
+      return sketch;
+    } catch (error) {
+      logger.error(`Error getting sketch details: ${error.message}`);
+      if (error.response) {
+        logger.error('API Error details:', {
+          status: error.response.status,
+          data: error.response.data
+        });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Add a circle to an existing sketch
+   * @param {string} did - Document ID
+   * @param {string} wid - Workspace ID
+   * @param {string} eid - Element ID
+   * @param {string} sketchId - ID of the sketch to add the circle to
+   * @param {Object} circleData - Circle parameters (radius, center coordinates)
+   * @returns {Promise<Object>} Created circle entity information
+   */
+  async addCircleToSketch(did, wid, eid, sketchId, circleData) {
+    try {
+      logger.info(`Adding circle to sketch ${sketchId}`);
+      
+      // Generate a unique entity ID for the circle
+      const entityId = Math.random().toString(36).substring(2, 15) + 
+                      Math.random().toString(36).substring(2, 15);
+      
+      // Build the request body for adding a circle to the sketch
+      const requestBody = {
+        feature: {
+          btType: "BTMFeature-141",
+          featureType: "sketch",
+          name: "Update Sketch",
+          suppressed: false,
+          featureId: sketchId,
+          entities: [
+            {
+              btType: "BTMSketchCurve-4",
+              entityId: entityId,
+              geometry: {
+                btType: "BTCurveGeometryCircle-115",
+                radius: circleData.radius || 0.0127,
+                xCenter: circleData.centerX || 0.0,
+                yCenter: circleData.centerY || 0.0,
+                xDir: 1,
+                yDir: 0,
+                clockwise: false
+              },
+              centerId: `${entityId}.center`
+            }
+          ]
+        }
+      };
+
+      const url = `/api/v10/partstudios/d/${did}/w/${wid}/e/${eid}/features`;
+      logger.logApiCall('Adding circle to sketch', 'POST', url, requestBody);
+      
+      const response = await this.apiClient.callAPI('POST', url, {}, requestBody);
+
+      if (!response || !response.feature) {
+        logger.error('Invalid API response:', response);
+        throw new Error('Invalid response from Onshape API');
+      }
+
+      logger.info('Circle added successfully');
+      return response.feature;
+    } catch (error) {
+      logger.error(`Error adding circle to sketch: ${error.message}`);
+      if (error.response) {
+        logger.error('API Error details:', {
+          status: error.response.status,
+          data: error.response.data
+        });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get all sketches from a part studio
+   * @param {string} did - Document ID
+   * @param {string} wid - Workspace ID
+   * @param {string} eid - Element ID
+   * @returns {Promise<Array>} Array of sketch features
+   */
+  async getSketches(did, wid, eid) {
+    try {
+      logger.info(`Getting sketches for document ${did}, workspace ${wid}, element ${eid}`);
+      
+      const url = `/api/v10/partstudios/d/${did}/w/${wid}/e/${eid}/features`;
+      logger.logApiCall('Getting features', 'GET', url);
+      
+      const response = await this.apiClient.callAPI('GET', url, {});
+      
+      if (!response || !response.features) {
+        logger.error('Invalid API response:', response);
+        throw new Error('Invalid response from Onshape API');
+      }
+
+      // Filter for sketch features
+      const sketches = response.features.filter(feature => 
+        feature.btType === 'BTMSketch-151' || 
+        feature.featureType === 'newSketch'
+      );
+
+      logger.info(`Found ${sketches.length} sketches`);
+      return sketches;
+    } catch (error) {
+      logger.error(`Error getting sketches: ${error.message}`);
+      if (error.response) {
+        logger.error('API Error details:', {
+          status: error.response.status,
+          data: error.response.data
+        });
+      }
+      throw error;
+    }
   }
 }
 

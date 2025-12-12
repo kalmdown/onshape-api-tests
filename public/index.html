@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Onshape API Express</title>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
   <style>
     body {
-      padding-top: 2rem;
-      padding-bottom: 2rem;
+      padding-top: 0rem;
+      padding-bottom: 0rem;
     }
     .example-container {
       margin-bottom: 1.5rem;
@@ -17,7 +17,7 @@
       padding: 1rem;
     }
     .log-area {
-      height: 300px;
+      height: calc(100vh - 4rem);
       overflow-y: auto;
       background-color: #f8f9fa;
       padding: 1rem;
@@ -25,9 +25,11 @@
       border-radius: 0.25rem;
       font-family: monospace;
       margin-top: 1rem;
+      line-height: 1;
     }
     .log-entry {
-      margin-bottom: 0.5rem;
+      margin-top: 1rem;
+      margin-bottom: 0.25rem;
     }
     .log-entry-time {
       color: #6c757d;
@@ -54,8 +56,33 @@
       margin-left: 1rem;
       white-space: pre-wrap;
     }
+    .section {
+      margin-bottom: 1.5rem;
+      border: 1px solid #dee2e6;
+      border-radius: 0.25rem;
+      padding: 1rem;
+    }
     .input-group {
       margin-bottom: 1rem;
+      flex: auto;
+      flex-direction: column;
+    }
+    .input-group label {
+      font-weight: 500;
+    }
+    .input-group input,
+    .input-group select {
+      width: 100%;
+      padding: 0.375rem 0.75rem;
+      border: 1px solid #ced4da;
+      border-radius: 0.25rem;
+    }
+    .form-select {
+      width: 100%;
+    }
+    .section button {
+      width: 100%;
+      margin-top: 1rem;
     }
   </style>
 </head>
@@ -73,28 +100,28 @@
             <div class="row">
               <div class="col-md-4">
                 <div class="input-group">
-                  <span class="input-group-text">Document ID</span>
-                  <input type="text" id="documentId" class="form-control" placeholder="did">
+                  <label>Document ID</label>
+                  <input type="text" id="documentId" placeholder="did" value="398a82c2e197a5efee277cf7">
                 </div>
               </div>
               <div class="col-md-4">
                 <div class="input-group">
-                  <span class="input-group-text">Workspace ID</span>
-                  <input type="text" id="workspaceId" class="form-control" placeholder="wid">
+                  <label>Workspace ID</label>
+                  <input type="text" id="workspaceId" placeholder="wid" value="a71572336b87355a5929aba6">
                 </div>
               </div>
               <div class="col-md-4">
                 <div class="input-group">
-                  <span class="input-group-text">Element ID</span>
-                  <input type="text" id="elementId" class="form-control" placeholder="eid">
+                  <label>Element ID</label>
+                  <input type="text" id="elementId" placeholder="eid" value="f0c841cca00dfe25a0308421">
                 </div>
               </div>
             </div>
             <div class="row">
               <div class="col-md-12">
                 <div class="input-group">
-                  <span class="input-group-text">Server URL</span>
-                  <input type="text" id="serverUrl" class="form-control" value="http://localhost:3000" placeholder="http://localhost:3000">
+                  <label>Server URL</label>
+                  <input type="text" id="serverUrl" value="http://localhost:3010" placeholder="http://localhost:3010">
                 </div>
               </div>
             </div>
@@ -118,48 +145,72 @@
           <button class="btn btn-primary" id="getDefaultPlanes">Get Default Planes</button>
         </div>
 
-        <div class="example-container">
-          <h3>Create Sketch on Default Plane</h3>
-          <p>Create a circular sketch on a default plane</p>
-          <div class="mb-3">
-            <label class="form-label">Plane</label>
-            <select class="form-select" id="sketchPlane">
-              <option value="top">Top</option>
-              <option value="front">Front</option>
-              <option value="right">Right</option>
+        <div class="section">
+          <h3>Create Sketch</h3>
+          <div class="input-group">
+            <label for="sketchPlane">Plane:</label>
+            <select id="sketchPlane" title="Select sketch plane">
+              <option value="Top">Top</option>
+              <option value="Front">Front</option>
+              <option value="Right">Right</option>
             </select>
           </div>
           <button class="btn btn-primary" id="createSketch">Create Sketch</button>
         </div>
 
-        <div class="example-container">
-          <h3>Create Extrude Feature</h3>
-          <p>Create an extrude from an existing sketch</p>
-          <div class="mb-3">
-            <label class="form-label">Sketch ID</label>
-            <input type="text" class="form-control" id="extrudeSketchId" placeholder="Enter Sketch ID">
+        <div class="section">
+          <h3>Add Circle to Sketch</h3>
+          <div class="input-group">
+            <label for="addCircleSketchId">Sketch:</label>
+            <select id="addCircleSketchId" title="Select sketch">
+              <option value="">Loading sketches...</option>
+            </select>
           </div>
-          <div class="mb-3">
-            <label class="form-label">Depth (inches)</label>
-            <input type="number" class="form-control" id="extrudeDepth" value="2.0">
+          <div class="input-group">
+            <label for="addCircleRadius">Radius (inches):</label>
+            <input type="number" id="addCircleRadius" value="1.0" step="0.1">
+          </div>
+          <div class="input-group">
+            <label for="addCircleCenterX">Center X:</label>
+            <input type="number" id="addCircleCenterX" value="0" step="0.1">
+          </div>
+          <div class="input-group">
+            <label for="addCircleCenterY">Center Y:</label>
+            <input type="number" id="addCircleCenterY" value="0" step="0.1">
+          </div>
+          <button class="btn btn-primary" id="addCircleBtn">Add Circle to Sketch</button>
+        </div>
+
+        <div class="section">
+          <h3>Create Extrude</h3>
+          <div class="input-group">
+            <label for="extrudeSketchId">Sketch ID:</label>
+            <input type="text" id="extrudeSketchId" placeholder="Enter sketch ID">
+          </div>
+          <div class="input-group">
+            <label for="extrudeCircleId">Circle Entity ID:</label>
+            <input type="text" id="extrudeCircleId" placeholder="Enter circle entity ID">
+          </div>
+          <div class="input-group">
+            <label for="extrudeDepth">Depth (inches):</label>
+            <input type="number" id="extrudeDepth" value="1.0" step="0.1">
           </div>
           <button class="btn btn-primary" id="createExtrude">Create Extrude</button>
         </div>
 
-        <div class="example-container">
+        <div class="section">
           <h3>Create Complete Feature</h3>
-          <p>Create a sketch and extrude in one step</p>
-          <div class="mb-3">
-            <label class="form-label">Plane</label>
-            <select class="form-select" id="completePlane">
-              <option value="top">Top</option>
-              <option value="front">Front</option>
-              <option value="right">Right</option>
+          <div class="input-group">
+            <label for="completePlane">Plane:</label>
+            <select id="completePlane" title="Select sketch plane">
+              <option value="Top">Top</option>
+              <option value="Front">Front</option>
+              <option value="Right">Right</option>
             </select>
           </div>
-          <div class="mb-3">
-            <label class="form-label">Depth (inches)</label>
-            <input type="number" class="form-control" id="completeDepth" value="1.5">
+          <div class="input-group">
+            <label for="completeDepth">Depth (inches):</label>
+            <input type="number" id="completeDepth" value="1.5" step="0.1" placeholder="Enter extrusion depth">
           </div>
           <button class="btn btn-primary" id="createComplete">Create Complete Feature</button>
         </div>
@@ -175,7 +226,7 @@
     </div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
-  <script src="main.js"></script>
+  <script src="/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+  <script src="/js/main.js"></script>
 </body>
 </html>

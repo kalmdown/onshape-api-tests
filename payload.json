@@ -1,0 +1,3 @@
+{
+  "script": "function(context is Context, queries) { var results = {}; var topPlane = evaluateQuery(context, qCreatedBy(makeId('Top'), EntityType.FACE)); results.top = transientQueriesToStrings(topPlane); var frontPlane = evaluateQuery(context, qCreatedBy(makeId('Front'), EntityType.FACE)); results.front = transientQueriesToStrings(frontPlane); var rightPlane = evaluateQuery(context, qCreatedBy(makeId('Right'), EntityType.FACE)); results.right = transientQueriesToStrings(rightPlane); return results; }"
+} 

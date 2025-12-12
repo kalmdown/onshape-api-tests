@@ -10,6 +10,49 @@ const {
   createHash 
 } = require('crypto');
 
+// Add WebSocket support for real-time logging
+const WebSocket = require('ws');
+const wss = new WebSocket.Server({ port: 3011 });
+
+// Store connected clients
+const clients = new Set();
+
+wss.on('connection', (ws) => {
+    clients.add(ws);
+    console.log('Client connected');
+
+    ws.on('close', () => {
+        clients.delete(ws);
+        console.log('Client disconnected');
+    });
+});
+
+wss.on('error', (error) => {
+    console.error('WebSocket server error:', error);
+});
+
+wss.on('listening', () => {
+    console.log('WebSocket server is listening on port 3011');
+});
+
+// Function to broadcast logs to all connected clients
+function broadcastLog(type, data) {
+    const message = JSON.stringify({ type, data });
+    clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(message);
+        }
+    });
+}
+
+// Update the logger to broadcast logs
+const logger = require('./utils/logger');
+const originalLogApiCall = logger.logApiCall;
+logger.logApiCall = function(message, method, url, payload) {
+    originalLogApiCall.call(this, message, method, url, payload);
+    broadcastLog('onshapeApiCall', { message, method, url, payload });
+};
+
 dotenv.config();
 
 const app = express();
