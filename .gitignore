@@ -1,1 +1,20 @@
 node_modules/
+
+# Credentials and machine-local configuration
+.env
+.env.*
+!.env.example
+!.env.1password.example
+*.key
+*.p12
+*.pfx
+*.pem
+
+# Agent conversation exports and runtime output
+.specstory/
+other/Chats/
+logs/
+*.log
+combined.log
+cylinder_api_calls.txt
+.DS_Store
